@@ -5,38 +5,51 @@ const $convertedValue = document.querySelector('[data-js="converted-value"]');
 const $valuePrecision = document.querySelector('[data-js="conversion-precision"]');
 const $currencyOnTimes = document.querySelector('[data-js="currency-one-times"]');
 
-let internalExchangeRate = {};
-
 const showAlert = (error) => {
   const div = document.createElement("div");
-    const button = document.createElement("button");
+  const button = document.createElement("button");
 
-    div.classList.add(
-      "alert",
-      "alert-warning",
-      "alert-dismissible",
-      "fade",
-      "show"
-    );
-    button.classList.add("btn-close");
+  div.classList.add(
+    "alert",
+    "alert-warning",
+    "alert-dismissible",
+    "fade",
+    "show"
+  );
+  button.classList.add("btn-close");
 
-    div.setAttribute("role", "alert");
-    button.setAttribute("type", "button");
-    button.setAttribute("aria-label", "Close");
+  div.setAttribute("role", "alert");
+  button.setAttribute("type", "button");
+  button.setAttribute("aria-label", "Close");
 
-    div.textContent = error.message;
+  div.textContent = error.message;
 
-    button.addEventListener("click", () => {
-      div.remove();
-    });
+  button.addEventListener("click", () => {
+    div.remove();
+  });
 
-    div.appendChild(button);
-    $currenciesEl.insertAdjacentElement("afterend", div);
-}
+  div.appendChild(button);
+  $currenciesEl.insertAdjacentElement("afterend", div);
+};
+
+const state = (() => {
+  let exchangeRate = {};
+  return {
+    getExchangeRate: () => exchangeRate,
+    setExchangeRate: (newExchangeRate) => {
+      if (!newExchangeRate.conversion_rates) {
+        showAlert({ message: "Eita que essa porra vai subir de vida" });
+        return;
+      }
+      exchangeRate = newExchangeRate;
+      return exchangeRate;
+    },
+  };
+})();
 
 const getUrl = (currency) => {
   return `https://v6.exchangerate-api.com/v6/98de2e981fb2323e3d5890fd/latest/${currency}`;
-}
+};
 
 const getErrormessage = (errorType) =>
   ({
@@ -65,59 +78,65 @@ const fetchExchangeRate = async (url) => {
 
     return responseJson;
   } catch (error) {
-    showAlert(error)
+    showAlert(error);
   }
 };
 
-const showInitalInfo = () => {
+const showInitalInfo = (exchangeRate) => {
   const getOptions = (selectedOption) =>
-  Object.keys(internalExchangeRate.conversion_rates)
-    .map(
-      (currency) => /*html*/ `
+    Object.keys(exchangeRate.conversion_rates)
+      .map(
+        (currency) => /*html*/ `
         <option ${currency === selectedOption ? "selected" : ""}>
         ${currency}
         </option>`
-    )
-    .join("");
+      )
+      .join("");
 
   $currencyOne.innerHTML = getOptions("USD");
   $currencyTwo.innerHTML = getOptions("BRL");
 
-  $convertedValue.textContent = internalExchangeRate.conversion_rates.BRL.toFixed(2);
-  $valuePrecision.textContent = `1 USD = ${internalExchangeRate.conversion_rates.BRL}`;
-}
+  $convertedValue.textContent = exchangeRate.conversion_rates.BRL.toFixed(2);
+  $valuePrecision.textContent = `1 USD = ${exchangeRate.conversion_rates.BRL}`;
+};
 
 const init = async () => {
-
-  internalExchangeRate = { ...(await fetchExchangeRate(getUrl('USD'))) };
-
-  if(internalExchangeRate.conversion_rates) {
-    showInitalInfo()
+  // internalExchangeRate = { ...(await fetchExchangeRate(getUrl('USD'))) };
+  const exchangeRate = state.setExchangeRate(
+    await fetchExchangeRate(getUrl("USD"))
+  );
+  if (exchangeRate && exchangeRate.conversion_rates) {
+    showInitalInfo(exchangeRate);
   }
 };
 
-const showUpdateRates = () => {
-
-}
+const showUpdateRates = (exchangeRate) => {
+  $convertedValue.textContent = (
+    $currencyOnTimes.value *
+    exchangeRate.conversion_rates[$currencyTwo.value]
+  ).toFixed(2);
+  $valuePrecision.textContent = `1 ${$currencyOne.value} = ${
+    1 * exchangeRate.conversion_rates[$currencyTwo.value]
+  } ${$currencyTwo.value}`;
+};
 
 $currencyOnTimes.addEventListener("input", (event) => {
+  const exchangeRate = state.getExchangeRate()
   $convertedValue.textContent = (
     event.target.value *
-    internalExchangeRate.conversion_rates[$currencyTwo.value]
+    exchangeRate.conversion_rates[$currencyTwo.value]
   ).toFixed(2);
 });
 
 $currencyTwo.addEventListener("input", () => {
-  const currencyTwoValue = internalExchangeRate.conversion_rates[$currencyTwo.value]
-
-  $convertedValue.textContent = ($currencyOnTimes.value * currencyTwoValue).toFixed(2)
-  $valuePrecision.textContent = `1 ${$currencyOne.value} = ${1 * internalExchangeRate.conversion_rates[$currencyTwo.value]} ${$currencyTwo.value}`
-})
+  const exchangeRate = state.getExchangeRate()
+  showUpdateRates(exchangeRate)
+});
 
 $currencyOne.addEventListener("input", async (event) => {
-  internalExchangeRate = { ...(await fetchExchangeRate(getUrl(event.target.value))) }
-  $convertedValue.textContent = ($currencyOnTimes.value * internalExchangeRate.conversion_rates[$currencyTwo.value]).toFixed(2)
-  $valuePrecision.textContent = `1 ${$currencyOne.value} = ${1 * internalExchangeRate.conversion_rates[$currencyTwo.value]} ${$currencyTwo.value}`
-})
+  const exchangeRate = state.setExchangeRate(await fetchExchangeRate(getUrl(event.target.value)))
+  console.log(exchangeRate)
+  showUpdateRates(exchangeRate);
+});
 
 init();
